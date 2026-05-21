@@ -105,7 +105,8 @@ struct DDCService {
 
         Log.debug("IOAVService opened successfully")
 
-        let destinationAddress: UInt8 = 0x37
+        // DDC/CI checksum uses the 8-bit I2C write address (0x37 << 1)
+        let checksumAddress: UInt8 = 0x6E
         let sourceAddress: UInt8 = 0x51
         // 0x80 | 4 payload bytes
         let length: UInt8 = 0x84
@@ -113,22 +114,25 @@ struct DDCService {
         let valueHigh = UInt8(value >> 8)
         let valueLow = UInt8(value & 0xFF)
 
-        let checksum = destinationAddress ^ sourceAddress ^ length
+        let checksum = checksumAddress ^ sourceAddress ^ length
             ^ opcode ^ code ^ valueHigh ^ valueLow
 
         var data: [UInt8] = [
-            sourceAddress, length, opcode,
+            length, opcode,
             code, valueHigh, valueLow,
             checksum
         ]
 
         let packet = data.map { String(format: "0x%02X", $0) }
             .joined(separator: " ")
-        Log.debug("DDC/CI packet: [\(packet)]")
+        Log.debug(
+            "DDC/CI write: addr=0x37 sub=0x51 data=[\(packet)]"
+        )
 
         return writeI2C(
             avService: avService,
-            address: 0x37,
+            chipAddress: 0x37,
+            dataAddress: UInt32(sourceAddress),
             data: &data,
             count: data.count
         )
@@ -159,7 +163,8 @@ struct DDCService {
     /// Sends raw I2C data to a display via the private IOAVServiceWriteI2C API.
     private func writeI2C(
         avService: AnyObject,
-        address: UInt32,
+        chipAddress: UInt32,
+        dataAddress: UInt32,
         data: UnsafeMutablePointer<UInt8>,
         count: Int
     ) -> Bool {
@@ -179,7 +184,9 @@ struct DDCService {
         }
 
         let write = unsafeBitCast(symbol, to: WriteFunction.self)
-        let ioResult = write(avService, address, 0, data, UInt32(count))
+        let ioResult = write(
+            avService, chipAddress, dataAddress, data, UInt32(count)
+        )
         let isSuccessful = ioResult == kIOReturnSuccess
 
         Log.debug(
