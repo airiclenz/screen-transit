@@ -1,5 +1,5 @@
 
-# ScreenTransit — Technical Design
+# screen-transit — Technical Design
 
 **Bluetooth-triggered monitor input switcher for macOS (Apple Silicon)**
 
@@ -8,27 +8,27 @@ A lightweight Swift CLI daemon that monitors Bluetooth device connect/disconnect
 ## Architecture
 
 ```
-┌────────────────────────────┐
-│  IOBluetooth Framework     │
-│  (event-driven, no poll)   │
-├────────────────────────────┤
-│  BluetoothWatcher          │
-│  • registers for connect   │
-│    notifications           │
-│  • filters by MAC address  │
-│  • on match → fires rule   │
-├────────────────────────────┤
-│  DDCService                │
-│  • IOKit / IOAVService     │
-│  • native I2C DDC/CI write │
-│  • VCP 0x60 input switch   │
-├────────────────────────────┤
-│  ConfigLoader              │
-│  • reads YAML from         │
-│    ~/.config/screentransit/ │
-│    config.yaml             │
-│  • validates on startup    │
-└────────────────────────────┘
+┌──────────────────────────────┐
+│  IOBluetooth Framework       │
+│  (event-driven, no poll)     │
+├──────────────────────────────┤
+│  BluetoothWatcher            │
+│  • registers for connect.    │
+│    notifications             │
+│  • filters by MAC address.   │
+│  • on match → fires rule     │
+├──────────────────────────────┤
+│  DDCService                  │
+│  • IOKit / IOAVService       │
+│  • native I2C DDC/CI write   │
+│  • VCP 0x60 input switch     │
+├──────────────────────────────┤
+│  ConfigLoader                │
+│  • reads YAML from           │
+│    ~/.config/screen-transit/ │
+│    config.yaml               │
+│  • validates on startup      │
+└──────────────────────────────┘
 ```
 
 **Runtime flow:**
@@ -48,10 +48,10 @@ A lightweight Swift CLI daemon that monitors Bluetooth device connect/disconnect
 
 ## Configuration
 
-**Location:** `~/.config/screentransit/config.yaml`
+**Location:** `~/.config/screen-transit/config.yaml`
 
 ```yaml
-# ScreenTransit configuration
+# screen-transit configuration
 #
 # DDC/CI note: monitors listen for DDC/CI commands on ALL connected
 # ports regardless of which input is currently active. This means
@@ -91,17 +91,17 @@ rules:
 ## Project Structure
 
 ```
-ScreenTransit/
+screen-transit/
 ├── Package.swift
 ├── Sources/
-│   └── ScreenTransit/
+│   └── screen-transit/
 │       ├── main.swift                # Entry point: load config, start watcher, run loop
 │       ├── Config.swift              # YAML parser + Config/Rule models
 │       ├── BluetoothWatcher.swift    # IOBluetooth connect/disconnect observer
 │       ├── DDCService.swift          # Native DDC/CI via IOKit/IOAVService
 │       └── Logger.swift              # Timestamped stderr logging
 └── launchd/
-    └── com.screentransit.agent.plist # launchd user agent template
+    └── com.screen-transit.agent.plist # launchd user agent template
 ```
 
 **SPM Package.swift:**
@@ -111,12 +111,12 @@ ScreenTransit/
 import PackageDescription
 
 let package = Package(
-    name: "ScreenTransit",
+    name: "screen-transit",
     platforms: [.macOS(.v12)],
     targets: [
         .executableTarget(
-            name: "screentransit",
-            path: "Sources/ScreenTransit",
+            name: "screen-transit",
+            path: "Sources/screen-transit",
             linkerSettings: [
                 .linkedFramework("IOBluetooth")
             ]
@@ -132,7 +132,7 @@ No external dependencies. YAML parsing is hand-rolled for the flat config struct
 ### Config.swift
 
 **Responsibilities:**
-- Read `~/.config/screentransit/config.yaml`
+- Read `~/.config/screen-transit/config.yaml`
 - Parse YAML manually (line-based: split on `:`, handle array items with `- ` prefix, track indentation for nesting)
 - Normalise MAC addresses to uppercase colon-separated format (`AA:BB:CC:DD:EE:FF`)
 - Validate: all required fields present, MAC format valid, trigger is `connect` or `disconnect`, input is positive integer
@@ -140,7 +140,7 @@ No external dependencies. YAML parsing is hand-rolled for the flat config struct
 **Models:**
 
 ```swift
-struct ScreenTransitConfig {
+struct screen-transitConfig {
     let delay: Double
     let rules: [SwitchRule]
 }
@@ -372,12 +372,12 @@ import IOBluetooth
 import Foundation
 
 class BluetoothWatcher {
-    private let config: ScreenTransitConfig
+    private let config: screen-transitConfig
     private let ddc: DDCService
     private var connectNotification: IOBluetoothUserNotification?
     private var pendingWork: [String: DispatchWorkItem] = [:]  // keyed by rule name
 
-    init(config: ScreenTransitConfig, ddc: DDCService) {
+    init(config: screen-transitConfig, ddc: DDCService) {
         self.config = config
         self.ddc = ddc
     }
@@ -480,7 +480,7 @@ class BluetoothWatcher {
 
 ### Logger.swift
 
-Minimal timestamped logging to stderr (visible in `Console.app` under the launchd label and in `/tmp/screentransit.stderr.log`).
+Minimal timestamped logging to stderr (visible in `Console.app` under the launchd label and in `/tmp/screen-transit.stderr.log`).
 
 ```swift
 import Foundation
@@ -511,14 +511,14 @@ import Foundation
 
 // 1. Load config
 let configPath = FileManager.default.homeDirectoryForCurrentUser
-    .appendingPathComponent(".config/screentransit/config.yaml")
+    .appendingPathComponent(".config/screen-transit/config.yaml")
 
 guard let config = ConfigLoader.load(from: configPath) else {
     Log.error("Failed to load config from \(configPath.path)")
     exit(1)
 }
 
-Log.info("ScreenTransit started with \(config.rules.count) rule(s)")
+Log.info("screen-transit started with \(config.rules.count) rule(s)")
 for rule in config.rules {
     Log.info("  Rule: \(rule.name) — \(rule.trigger.rawValue) "
            + "\(rule.bluetoothMAC) → display \(rule.display), "
@@ -537,7 +537,7 @@ RunLoop.main.run()
 
 ## launchd User Agent
 
-**File:** `~/Library/LaunchAgents/com.screentransit.agent.plist`
+**File:** `~/Library/LaunchAgents/com.screen-transit.agent.plist`
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -546,19 +546,19 @@ RunLoop.main.run()
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.screentransit.agent</string>
+    <string>com.screen-transit.agent</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/local/bin/screentransit</string>
+        <string>/usr/local/bin/screen-transit</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/tmp/screentransit.stdout.log</string>
+    <string>/tmp/screen-transit.stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/screentransit.stderr.log</string>
+    <string>/tmp/screen-transit.stderr.log</string>
 </dict>
 </plist>
 ```
@@ -567,31 +567,31 @@ RunLoop.main.run()
 
 ```bash
 # Build
-cd ScreenTransit/
+cd screen-transit/
 swift build -c release
 
 # Install binary
-cp .build/release/screentransit /usr/local/bin/screentransit
+cp .build/release/screen-transit /usr/local/bin/screen-transit
 
 # Create config directory and edit config
-mkdir -p ~/.config/screentransit
-nano ~/.config/screentransit/config.yaml
+mkdir -p ~/.config/screen-transit
+nano ~/.config/screen-transit/config.yaml
 
 # Install and load launchd agent
-cp launchd/com.screentransit.agent.plist ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/com.screentransit.agent.plist
+cp launchd/com.screen-transit.agent.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.screen-transit.agent.plist
 
 # Verify
-launchctl list | grep screentransit
-tail -f /tmp/screentransit.stderr.log
+launchctl list | grep screen-transit
+tail -f /tmp/screen-transit.stderr.log
 
 # Reload after rebuild
-launchctl kickstart -k gui/$(id -u)/com.screentransit.agent
+launchctl kickstart -k gui/$(id -u)/com.screen-transit.agent
 
 # Uninstall
-launchctl unload ~/Library/LaunchAgents/com.screentransit.agent.plist
-rm ~/Library/LaunchAgents/com.screentransit.agent.plist
-rm /usr/local/bin/screentransit
+launchctl unload ~/Library/LaunchAgents/com.screen-transit.agent.plist
+rm ~/Library/LaunchAgents/com.screen-transit.agent.plist
+rm /usr/local/bin/screen-transit
 ```
 
 ## Discovery: Finding Your Values
@@ -645,18 +645,18 @@ Monitors with DDC/CI process commands on **all physically connected ports**, not
 
 **Multiple rules per device:** A device can have both a connect and disconnect rule (common pattern: connect → switch to DP, disconnect → switch to USB-C). These are independent rules with separate work items.
 
-**IOAVService stability:** The `IOAVServiceCreate` / `IOAVServiceWriteI2C` functions are private APIs. They have been stable across macOS 12–15 and are the same path m1ddc uses. If Apple changes these in a future macOS version, ScreenTransit would need updating — but so would every DDC/CI tool on the platform.
+**IOAVService stability:** The `IOAVServiceCreate` / `IOAVServiceWriteI2C` functions are private APIs. They have been stable across macOS 12–15 and are the same path m1ddc uses. If Apple changes these in a future macOS version, screen-transit would need updating — but so would every DDC/CI tool on the platform.
 
 **Permissions:** `IOBluetooth` will trigger a Bluetooth permission prompt on first run. The launchd agent handles this — macOS shows the dialog. No entitlements or code signing required for a CLI tool.
 
 **Display hot-plug:** If a display is disconnected and reconnected, its index from `m1ddc display list` may change. For setups with multiple external displays, verify display numbering after any cable changes.
 
-**Config reload:** For v1, restart the agent after config changes (`launchctl kickstart -k gui/$(id -u)/com.screentransit.agent`). Future enhancement: watch the config file with `DispatchSource.makeFileSystemObjectSource`.
+**Config reload:** For v1, restart the agent after config changes (`launchctl kickstart -k gui/$(id -u)/com.screen-transit.agent`). Future enhancement: watch the config file with `DispatchSource.makeFileSystemObjectSource`.
 
 ## Future Enhancements
 
 - **Config file watcher** — auto-reload on change via `DispatchSource.makeFileSystemObjectSource`
 - **Display matching by serial/model** — more stable than index for multi-monitor setups
 - **Read VCP** — verify current input before switching (skip if already correct)
-- **Status command** — `screentransit --status` to show loaded rules and connected devices
-- **Dry-run mode** — `screentransit --dry-run` to log what would happen without sending DDC/CI commands
+- **Status command** — `screen-transit --status` to show loaded rules and connected devices
+- **Dry-run mode** — `screen-transit --dry-run` to log what would happen without sending DDC/CI commands
