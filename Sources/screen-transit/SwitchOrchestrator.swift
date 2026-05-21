@@ -75,8 +75,9 @@ class SwitchOrchestrator: EventSourceDelegate {
     private func scheduleSwitch(rule: SwitchRule) {
         pendingWork[rule.name]?.cancel()
 
-        let work = DispatchWorkItem { [weak self] in
-            guard let self = self else { return }
+        var work: DispatchWorkItem!
+        work = DispatchWorkItem { [weak self] in
+            guard let self = self, !work.isCancelled else { return }
 
             Log.info(
                 "Executing rule: \(rule.name) "

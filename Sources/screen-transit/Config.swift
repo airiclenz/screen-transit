@@ -85,7 +85,8 @@ enum ConfigLoader {
                 }
 
                 if stripped.hasPrefix("delay:") {
-                    delay = Double(extractValue(from: stripped)) ?? 1.0
+                    let parsed = Double(extractValue(from: stripped)) ?? 1.0
+                    delay = max(0.0, min(parsed, 30.0))
                 } else if stripped.hasPrefix("rules:") {
                     isParsingRules = true
                 }
@@ -154,17 +155,21 @@ enum ConfigLoader {
         }
 
         guard let displayString = fields["display"],
-              let display = Int(displayString) else {
-            Log.error("Rule '\(name)' missing or invalid field: display")
+              let display = Int(displayString),
+              display > 0 else {
+            Log.error(
+                "Rule '\(name)' missing or invalid field: display "
+                    + "(must be a positive integer)"
+            )
             return nil
         }
 
         guard let inputString = fields["input"],
               let input = Int(inputString),
-              input > 0 else {
+              input >= 0, input <= 255 else {
             Log.error(
                 "Rule '\(name)' missing or invalid field: input "
-                    + "(must be a positive integer)"
+                    + "(must be 0–255)"
             )
             return nil
         }
@@ -178,10 +183,10 @@ enum ConfigLoader {
             return nil
         }
 
-        let normalisedIdentifier = normaliseMAC(deviceIdentifier)
+        let normalisedIdentifier = MACAddress.normalise(deviceIdentifier)
 
         if source == "bluetooth" {
-            guard isValidMAC(normalisedIdentifier) else {
+            guard MACAddress.isValid(normalisedIdentifier) else {
                 Log.error(
                     "Rule '\(name)' has invalid MAC address: "
                         + "\(deviceIdentifier)"
@@ -251,22 +256,4 @@ enum ConfigLoader {
         return value
     }
 
-    // -------------------------------------------------------------------------
-    /// Normalises a MAC address to uppercase colon-separated format.
-    private static func normaliseMAC(_ address: String) -> String {
-        address
-            .uppercased()
-            .replacingOccurrences(of: "-", with: ":")
-    }
-
-    // -------------------------------------------------------------------------
-    /// Validates that a string is a well-formed MAC address (AA:BB:CC:DD:EE:FF).
-    private static func isValidMAC(_ address: String) -> Bool {
-        let octets = address.components(separatedBy: ":")
-        guard octets.count == 6 else { return false }
-
-        return octets.allSatisfy { octet in
-            octet.count == 2 && octet.allSatisfy { $0.isHexDigit }
-        }
-    }
 }

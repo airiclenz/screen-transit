@@ -73,6 +73,8 @@ enum Log {
 
     // -------------------------------------------------------------------------
     /// Appends data to the daily log file, rotating when the date changes.
+    private static var fileLoggingFailed = false
+
     private static func writeToFile(_ data: Data, date: Date) {
         let today = dateFormatter.string(from: date)
 
@@ -81,34 +83,63 @@ enum Log {
             currentLogFile = nil
 
             let manager = FileManager.default
-            try? manager.createDirectory(
-                at: logDirectory,
-                withIntermediateDirectories: true
-            )
-
             let filePath = logDirectory
                 .appendingPathComponent("\(today).log")
 
-            if !manager.fileExists(atPath: filePath.path) {
-                manager.createFile(
-                    atPath: filePath.path,
-                    contents: nil
+            do {
+                try manager.createDirectory(
+                    at: logDirectory,
+                    withIntermediateDirectories: true,
+                    attributes: [.posixPermissions: 0o700]
                 )
+            } catch {
+                warnFileLoggingOnce(
+                    "Cannot create log directory: \(error.localizedDescription)"
+                )
+                return
+            }
+
+            if !manager.fileExists(atPath: filePath.path) {
+                guard manager.createFile(
+                    atPath: filePath.path,
+                    contents: nil,
+                    attributes: [.posixPermissions: 0o600]
+                ) else {
+                    warnFileLoggingOnce(
+                        "Cannot create log file: \(filePath.path)"
+                    )
+                    return
+                }
             }
 
             guard let handle = try? FileHandle(
                 forWritingTo: filePath
             ) else {
+                warnFileLoggingOnce(
+                    "Cannot open log file for writing: \(filePath.path)"
+                )
                 return
             }
 
             handle.seekToEndOfFile()
             currentLogFile = (date: today, handle: handle)
+            fileLoggingFailed = false
 
             purgeOldLogs(manager: manager, today: date)
         }
 
         currentLogFile?.handle.write(data)
+    }
+
+    // -------------------------------------------------------------------------
+    /// Prints a file-logging failure warning to stderr once per session.
+    private static func warnFileLoggingOnce(_ message: String) {
+        guard !fileLoggingFailed else { return }
+        fileLoggingFailed = true
+        let warning = Data(
+            "[WARNING] File logging disabled: \(message)\n".utf8
+        )
+        FileHandle.standardError.write(warning)
     }
 
     // -------------------------------------------------------------------------
@@ -141,7 +172,6 @@ enum Log {
 
             let filePath = logDirectory.appendingPathComponent(file)
             try? manager.removeItem(at: filePath)
-            Log.info("Purged old log: \(file)")
         }
     }
 }

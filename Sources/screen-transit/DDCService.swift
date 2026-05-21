@@ -68,7 +68,6 @@ struct DDCService {
         }
         defer { IOObjectRelease(iterator) }
 
-        var result: io_service_t?
         var count = 0
 
         while true {
@@ -77,18 +76,21 @@ struct DDCService {
 
             count += 1
             if count == index {
-                result = service
-            } else {
-                IOObjectRelease(service)
+                Log.debug(
+                    "Found display service at index \(index)"
+                )
+                return service
             }
+
+            IOObjectRelease(service)
         }
 
         Log.debug(
-            "Found \(count) display service(s), "
-                + "requested index \(index)"
+            "Display index \(index) not found "
+                + "(only \(count) display(s) available)"
         )
 
-        return result
+        return nil
     }
 
     // -------------------------------------------------------------------------
@@ -123,11 +125,13 @@ struct DDCService {
             checksum
         ]
 
-        let packet = data.map { String(format: "0x%02X", $0) }
-            .joined(separator: " ")
-        Log.debug(
-            "DDC/CI write: addr=0x37 sub=0x51 data=[\(packet)]"
-        )
+        if Log.isDebugEnabled {
+            let packet = data.map { String(format: "0x%02X", $0) }
+                .joined(separator: " ")
+            Log.debug(
+                "DDC/CI write: addr=0x37 sub=0x51 data=[\(packet)]"
+            )
+        }
 
         return writeI2C(
             avService: avService,
@@ -152,6 +156,7 @@ struct DDCService {
             rtldDefault,
             "IOAVServiceCreate"
         ) else {
+            Log.error("IOAVServiceCreate symbol not found via dlsym")
             return nil
         }
 
@@ -180,6 +185,7 @@ struct DDCService {
             rtldDefault,
             "IOAVServiceWriteI2C"
         ) else {
+            Log.error("IOAVServiceWriteI2C symbol not found via dlsym")
             return false
         }
 
@@ -189,10 +195,12 @@ struct DDCService {
         )
         let isSuccessful = ioResult == kIOReturnSuccess
 
-        Log.debug(
-            "I2C write result: 0x\(String(ioResult, radix: 16)) "
-                + "(\(isSuccessful ? "success" : "failed"))"
-        )
+        if Log.isDebugEnabled {
+            Log.debug(
+                "I2C write result: 0x\(String(ioResult, radix: 16)) "
+                    + "(\(isSuccessful ? "success" : "failed"))"
+            )
+        }
 
         return isSuccessful
     }

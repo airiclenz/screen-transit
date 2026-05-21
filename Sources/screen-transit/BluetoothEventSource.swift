@@ -19,6 +19,10 @@ class BluetoothEventSource: NSObject, EventSource {
     /// Retained reference to the global connect notification registration.
     private var connectNotification: IOBluetoothUserNotification?
 
+    // =========================================================================
+    /// Retained references to per-device disconnect notification registrations.
+    private var disconnectNotifications: [String: IOBluetoothUserNotification] = [:]
+
     // -------------------------------------------------------------------------
     /// Creates a source that monitors Bluetooth events for the given identifiers.
     init(disconnectIdentifiers: Set<String>) {
@@ -33,7 +37,12 @@ class BluetoothEventSource: NSObject, EventSource {
             forConnectNotifications: self,
             selector: #selector(deviceDidConnect(_:device:))
         )
-        Log.info("Bluetooth event source registered")
+
+        if connectNotification != nil {
+            Log.info("Bluetooth event source registered")
+        } else {
+            Log.error("Failed to register Bluetooth connect notifications")
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -47,7 +56,7 @@ class BluetoothEventSource: NSObject, EventSource {
             return
         }
 
-        let identifier = normaliseMAC(rawAddress)
+        let identifier = MACAddress.normalise(rawAddress)
         let deviceName = device.name ?? "unknown"
         Log.info("Bluetooth device connected: \(identifier)")
         Log.debug(
@@ -62,10 +71,17 @@ class BluetoothEventSource: NSObject, EventSource {
         )
 
         if disconnectIdentifiers.contains(identifier) {
-            device.register(
+            guard let notification = device.register(
                 forDisconnectNotification: self,
                 selector: #selector(deviceDidDisconnect(_:device:))
-            )
+            ) else {
+                Log.error(
+                    "Failed to register disconnect notification "
+                        + "for \(identifier)"
+                )
+                return
+            }
+            disconnectNotifications[identifier] = notification
         }
     }
 
@@ -80,13 +96,15 @@ class BluetoothEventSource: NSObject, EventSource {
             return
         }
 
-        let identifier = normaliseMAC(rawAddress)
+        let identifier = MACAddress.normalise(rawAddress)
         let deviceName = device.name ?? "unknown"
         Log.info("Bluetooth device disconnected: \(identifier)")
         Log.debug(
             "Bluetooth disconnect detail: mac=\(identifier) "
                 + "name=\"\(deviceName)\""
         )
+
+        disconnectNotifications.removeValue(forKey: identifier)
 
         delegate?.eventSource(
             self,
@@ -95,11 +113,4 @@ class BluetoothEventSource: NSObject, EventSource {
         )
     }
 
-    // -------------------------------------------------------------------------
-    /// Normalises a MAC address to uppercase colon-separated format.
-    private func normaliseMAC(_ address: String) -> String {
-        address
-            .uppercased()
-            .replacingOccurrences(of: "-", with: ":")
-    }
 }
