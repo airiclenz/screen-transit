@@ -1,5 +1,2 @@
-import Foundation
-
-// =============================================================================
-/// Application version, kept in sync with the VERSION file at the project root.
-let appVersion = "0.0.1"
+// Auto-generated from VERSION by build.sh — do not edit manually.
+let appVersion = "0.1.0"

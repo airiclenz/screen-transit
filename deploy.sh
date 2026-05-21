@@ -10,7 +10,12 @@ PLIST_NAME="com.screen-transit.agent"
 PLIST_SOURCE="$SCRIPT_DIR/launchd/$PLIST_NAME.plist"
 PLIST_DEST="$HOME/Library/LaunchAgents/$PLIST_NAME.plist"
 
-echo "==> Building $BINARY_NAME (release)..."
+VERSION=$(cat "$SCRIPT_DIR/VERSION")
+
+echo "// Auto-generated from VERSION by build.sh — do not edit manually." > "$SCRIPT_DIR/Sources/screen-transit/Version.swift"
+echo "let appVersion = \"$VERSION\"" >> "$SCRIPT_DIR/Sources/screen-transit/Version.swift"
+
+echo "==> Building $BINARY_NAME v$VERSION (release)..."
 swift build -c release --package-path "$SCRIPT_DIR"
 
 echo "==> Stopping existing agent..."
