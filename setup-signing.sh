@@ -13,8 +13,14 @@ fi
 
 KEYCHAIN_PASS="${ST_KEYCHAIN_PASS:-}"
 if [ -z "$KEYCHAIN_PASS" ]; then
-    read -s -p "Login keychain password (for code-signing setup): " KEYCHAIN_PASS
-    echo
+    if [ -t 0 ]; then
+        read -s -p "Login keychain password (for code-signing setup): " KEYCHAIN_PASS
+        echo
+    else
+        echo "ERROR: No terminal available for password prompt."
+        echo "       Run manually: setup-signing.sh"
+        exit 1
+    fi
 fi
 
 echo "==> Creating self-signed code-signing certificate..."
