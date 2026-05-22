@@ -8,7 +8,7 @@ BINARY="${1:-}"
 sign_binary() {
     local binary="$1"
     local hash
-    hash=$(security find-certificate -c "$CERT_NAME" -a -Z 2>/dev/null \
+    hash=$(security find-certificate -c "$CERT_NAME" -Z 2>/dev/null \
         | grep "SHA-1" | head -1 | awk '{print $NF}')
     if [ -n "$hash" ]; then
         codesign -s "$hash" -f "$binary"
@@ -33,7 +33,7 @@ remove_duplicate_certs() {
     fi
 }
 
-if security find-certificate -c "$CERT_NAME" -a >/dev/null 2>&1; then
+if security find-certificate -c "$CERT_NAME" >/dev/null 2>&1; then
     remove_duplicate_certs
     echo "Code-signing certificate \"$CERT_NAME\" already exists."
     if [ -n "$BINARY" ]; then
@@ -91,7 +91,7 @@ security set-key-partition-list \
 
 security add-trusted-cert -p codeSign -k "$KEYCHAIN" "$TMPDIR_CERT/cert.pem" 2>/dev/null || true
 
-if ! security find-certificate -c "$CERT_NAME" -a >/dev/null 2>&1; then
+if ! security find-certificate -c "$CERT_NAME" >/dev/null 2>&1; then
     echo "ERROR: Certificate was imported but not found."
     echo "       Open Keychain Access, find \"$CERT_NAME\", and set Trust → Code Signing → Always Trust."
     exit 1

@@ -34,7 +34,7 @@ else
 fi
 
 CERT_NAME="Screen Transit Local"
-if security find-certificate -c "$CERT_NAME" -a >/dev/null 2>&1; then
+if security find-certificate -c "$CERT_NAME" >/dev/null 2>&1; then
     read -p "==> Remove code-signing certificate \"$CERT_NAME\"? [y/N] " answer
     if [[ "${answer:-N}" =~ ^[Yy]$ ]]; then
         security delete-identity -c "$CERT_NAME" 2>/dev/null || true
