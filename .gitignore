@@ -2,3 +2,4 @@
 .build/
 .swiftpm/
 /screen-transit
+Sources/screen-transit/Version.swift
