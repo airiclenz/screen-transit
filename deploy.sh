@@ -30,21 +30,13 @@ swift build -c release --package-path "$SCRIPT_DIR"
 echo "==> Stopping existing agent..."
 launchctl unload "$PLIST_DEST" 2>/dev/null || true
 
-echo "==> Setting up code signing..."
-"$SCRIPT_DIR/setup-signing.sh"
-
 echo "==> Installing binary to $INSTALL_DIR/$BINARY_NAME..."
 sudo install -m 755 \
     "$SCRIPT_DIR/.build/release/$BINARY_NAME" \
     "$INSTALL_DIR/$BINARY_NAME"
 
-if security find-identity -v 2>/dev/null | grep -q "$CERT_NAME"; then
-    echo "==> Signing binary with \"$CERT_NAME\"..."
-    codesign -s "$CERT_NAME" -f "$INSTALL_DIR/$BINARY_NAME"
-else
-    echo "WARNING: No signing certificate found. Bluetooth will prompt on every launch."
-    echo "         Run ./setup-signing.sh to create one."
-fi
+echo "==> Setting up code signing..."
+"$SCRIPT_DIR/setup-signing.sh" "$INSTALL_DIR/$BINARY_NAME"
 
 if [ ! -f "$CONFIG_FILE" ]; then
     echo "==> Creating default config at $CONFIG_FILE..."

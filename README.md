@@ -93,9 +93,8 @@ The deploy script automatically creates a local code-signing certificate on firs
 git clone https://github.com/airiclenz/screen-transit.git
 cd screen-transit
 ./build.sh
-./setup-signing.sh
-codesign -s "Screen Transit Local" -f .build/release/screen-transit
 sudo cp .build/release/screen-transit /usr/local/bin/
+./setup-signing.sh /usr/local/bin/screen-transit
 ```
 
 Then set up the config and launchd agent yourself (see below).
