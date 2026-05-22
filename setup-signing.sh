@@ -8,7 +8,7 @@ trap 'rm -rf "$TMPDIR_CERT"' EXIT
 
 BINARY="${1:-}"
 
-if security find-identity -v 2>/dev/null | grep -q "$CERT_NAME"; then
+if security find-certificate -c "$CERT_NAME" "$KEYCHAIN" >/dev/null 2>&1; then
     echo "Code-signing certificate \"$CERT_NAME\" already exists."
     if [ -n "$BINARY" ]; then
         codesign -s "$CERT_NAME" -f "$BINARY"
@@ -63,7 +63,7 @@ security set-key-partition-list \
 
 security add-trusted-cert -p codeSign -k "$KEYCHAIN" "$TMPDIR_CERT/cert.pem" 2>/dev/null || true
 
-if ! security find-identity -v 2>/dev/null | grep -q "$CERT_NAME"; then
+if ! security find-certificate -c "$CERT_NAME" "$KEYCHAIN" >/dev/null 2>&1; then
     echo "ERROR: Certificate was imported but not found."
     echo "       Open Keychain Access, find \"$CERT_NAME\", and set Trust → Code Signing → Always Trust."
     exit 1

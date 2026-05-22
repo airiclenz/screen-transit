@@ -34,7 +34,8 @@ else
 fi
 
 CERT_NAME="Screen Transit Local"
-if security find-identity -v -p codesigning | grep -q "$CERT_NAME"; then
+KEYCHAIN="${HOME}/Library/Keychains/login.keychain-db"
+if security find-certificate -c "$CERT_NAME" "$KEYCHAIN" >/dev/null 2>&1; then
     read -p "==> Remove code-signing certificate \"$CERT_NAME\"? [y/N] " answer
     if [[ "${answer:-N}" =~ ^[Yy]$ ]]; then
         security delete-identity -c "$CERT_NAME" 2>/dev/null || true

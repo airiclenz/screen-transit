@@ -13,7 +13,8 @@ CERT_NAME="Screen Transit Local"
 
 VERSION=$(cat "$SCRIPT_DIR/VERSION")
 
-if ! security find-identity -v 2>/dev/null | grep -q "$CERT_NAME"; then
+KEYCHAIN="${HOME}/Library/Keychains/login.keychain-db"
+if ! security find-certificate -c "$CERT_NAME" "$KEYCHAIN" >/dev/null 2>&1; then
     read -s -p "Login keychain password (for code-signing setup): " KEYCHAIN_PASS
     echo
     export ST_KEYCHAIN_PASS="$KEYCHAIN_PASS"
