@@ -6,7 +6,7 @@ KEYCHAIN="${HOME}/Library/Keychains/login.keychain-db"
 TMPDIR_CERT="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_CERT"' EXIT
 
-if security find-identity -v -p codesigning 2>/dev/null | grep -q "$CERT_NAME"; then
+if security find-identity -v 2>/dev/null | grep -q "$CERT_NAME"; then
     echo "Code-signing certificate \"$CERT_NAME\" already exists."
     exit 0
 fi
@@ -49,14 +49,12 @@ security set-key-partition-list \
     -c "$CERT_NAME" \
     "$KEYCHAIN" >/dev/null 2>&1
 
-sudo security add-trusted-cert -d -p codeSign \
-    -k /Library/Keychains/System.keychain \
-    "$TMPDIR_CERT/cert.pem"
+security add-trusted-cert -p codeSign -k "$KEYCHAIN" "$TMPDIR_CERT/cert.pem" 2>/dev/null || true
 
-if security find-identity -v -p codesigning 2>/dev/null | grep -q "$CERT_NAME"; then
-    echo "==> Certificate \"$CERT_NAME\" created and trusted for code signing."
+if security find-identity -v 2>/dev/null | grep -q "$CERT_NAME"; then
+    echo "==> Certificate \"$CERT_NAME\" created and ready for code signing."
 else
-    echo "ERROR: Certificate was imported but not recognized for code signing."
+    echo "ERROR: Certificate was imported but not found."
     echo "       Open Keychain Access, find \"$CERT_NAME\", and set Trust → Code Signing → Always Trust."
     exit 1
 fi

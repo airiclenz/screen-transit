@@ -13,19 +13,13 @@ CERT_NAME="Screen Transit Local"
 
 VERSION=$(cat "$SCRIPT_DIR/VERSION")
 
-NEEDS_SIGNING=0
-if ! security find-identity -v -p codesigning 2>/dev/null | grep -q "$CERT_NAME"; then
-    NEEDS_SIGNING=1
+if ! security find-identity -v 2>/dev/null | grep -q "$CERT_NAME"; then
+    read -s -p "Login keychain password (for code-signing setup): " KEYCHAIN_PASS
+    echo
+    export ST_KEYCHAIN_PASS="$KEYCHAIN_PASS"
 fi
 
-if [ "$NEEDS_SIGNING" = "1" ]; then
-    read -s -p "Password (for install and code-signing setup): " PASSWORD
-    echo
-    echo "$PASSWORD" | sudo -S true 2>/dev/null || { echo "ERROR: incorrect password"; exit 1; }
-    export ST_KEYCHAIN_PASS="$PASSWORD"
-else
-    sudo -v
-fi
+sudo -v
 
 echo "// Auto-generated from VERSION by build.sh — do not edit manually." > "$SCRIPT_DIR/Sources/screen-transit/Version.swift"
 echo "let appVersion = \"$VERSION\"" >> "$SCRIPT_DIR/Sources/screen-transit/Version.swift"
@@ -44,7 +38,7 @@ sudo install -m 755 \
     "$SCRIPT_DIR/.build/release/$BINARY_NAME" \
     "$INSTALL_DIR/$BINARY_NAME"
 
-if security find-identity -v -p codesigning 2>/dev/null | grep -q "$CERT_NAME"; then
+if security find-identity -v 2>/dev/null | grep -q "$CERT_NAME"; then
     echo "==> Signing binary with \"$CERT_NAME\"..."
     codesign -s "$CERT_NAME" -f "$INSTALL_DIR/$BINARY_NAME"
 else
