@@ -85,12 +85,16 @@ cd screen-transit
 ./deploy.sh
 ```
 
+The deploy script automatically creates a local code-signing certificate on first run. This lets macOS permanently remember the Bluetooth permission instead of prompting on every launch. The certificate is reused on subsequent deploys so the permission persists across updates.
+
 ### Manual
 
 ```bash
 git clone https://github.com/airiclenz/screen-transit.git
 cd screen-transit
 ./build.sh
+./setup-signing.sh
+codesign -s "Screen Transit Local" -f .build/release/screen-transit
 sudo cp .build/release/screen-transit /usr/local/bin/
 ```
 

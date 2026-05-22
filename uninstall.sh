@@ -33,5 +33,17 @@ else
     echo "    Logs kept."
 fi
 
+CERT_NAME="Screen Transit Local"
+if security find-identity -v -p codesigning | grep -q "$CERT_NAME"; then
+    read -p "==> Remove code-signing certificate \"$CERT_NAME\"? [y/N] " answer
+    if [[ "${answer:-N}" =~ ^[Yy]$ ]]; then
+        security delete-identity -c "$CERT_NAME" 2>/dev/null || true
+        security delete-certificate -c "$CERT_NAME" 2>/dev/null || true
+        echo "    Certificate removed."
+    else
+        echo "    Certificate kept."
+    fi
+fi
+
 echo ""
 echo "==> $BINARY_NAME uninstalled."

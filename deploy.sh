@@ -9,8 +9,23 @@ CONFIG_FILE="$CONFIG_DIR/config.yaml"
 PLIST_NAME="com.screen-transit.agent"
 PLIST_SOURCE="$SCRIPT_DIR/launchd/$PLIST_NAME.plist"
 PLIST_DEST="$HOME/Library/LaunchAgents/$PLIST_NAME.plist"
+CERT_NAME="Screen Transit Local"
 
 VERSION=$(cat "$SCRIPT_DIR/VERSION")
+
+NEEDS_SIGNING=0
+if ! security find-identity -v -p codesigning 2>/dev/null | grep -q "$CERT_NAME"; then
+    NEEDS_SIGNING=1
+fi
+
+if [ "$NEEDS_SIGNING" = "1" ]; then
+    read -s -p "Password (for install and code-signing setup): " PASSWORD
+    echo
+    echo "$PASSWORD" | sudo -S true 2>/dev/null || { echo "ERROR: incorrect password"; exit 1; }
+    export ST_KEYCHAIN_PASS="$PASSWORD"
+else
+    sudo -v
+fi
 
 echo "// Auto-generated from VERSION by build.sh — do not edit manually." > "$SCRIPT_DIR/Sources/screen-transit/Version.swift"
 echo "let appVersion = \"$VERSION\"" >> "$SCRIPT_DIR/Sources/screen-transit/Version.swift"
@@ -21,10 +36,21 @@ swift build -c release --package-path "$SCRIPT_DIR"
 echo "==> Stopping existing agent..."
 launchctl unload "$PLIST_DEST" 2>/dev/null || true
 
+echo "==> Setting up code signing..."
+"$SCRIPT_DIR/setup-signing.sh"
+
 echo "==> Installing binary to $INSTALL_DIR/$BINARY_NAME..."
 sudo install -m 755 \
     "$SCRIPT_DIR/.build/release/$BINARY_NAME" \
     "$INSTALL_DIR/$BINARY_NAME"
+
+if security find-identity -v -p codesigning 2>/dev/null | grep -q "$CERT_NAME"; then
+    echo "==> Signing binary with \"$CERT_NAME\"..."
+    codesign -s "$CERT_NAME" -f "$INSTALL_DIR/$BINARY_NAME"
+else
+    echo "WARNING: No signing certificate found. Bluetooth will prompt on every launch."
+    echo "         Run ./setup-signing.sh to create one."
+fi
 
 if [ ! -f "$CONFIG_FILE" ]; then
     echo "==> Creating default config at $CONFIG_FILE..."
