@@ -3,16 +3,41 @@ set -euo pipefail
 
 CERT_NAME="Screen Transit Local"
 KEYCHAIN="${HOME}/Library/Keychains/login.keychain-db"
-TMPDIR_CERT="$(mktemp -d)"
-trap 'rm -rf "$TMPDIR_CERT"' EXIT
-
 BINARY="${1:-}"
 
-if security find-certificate -c "$CERT_NAME" "$KEYCHAIN" >/dev/null 2>&1; then
+sign_binary() {
+    local binary="$1"
+    local hash
+    hash=$(security find-certificate -c "$CERT_NAME" -a -Z 2>/dev/null \
+        | grep "SHA-1" | head -1 | awk '{print $NF}')
+    if [ -n "$hash" ]; then
+        codesign -s "$hash" -f "$binary"
+        echo "==> Signed: $binary"
+    else
+        echo "ERROR: Certificate exists but could not determine signing hash."
+        exit 1
+    fi
+}
+
+remove_duplicate_certs() {
+    local count
+    count=$(security find-certificate -c "$CERT_NAME" -a 2>/dev/null \
+        | grep -c "labl" || true)
+    if [ "$count" -gt 1 ]; then
+        echo "==> Found $count duplicate certificates, cleaning up..."
+        while [ "$count" -gt 1 ]; do
+            security delete-certificate -c "$CERT_NAME" 2>/dev/null || break
+            count=$(security find-certificate -c "$CERT_NAME" -a 2>/dev/null \
+                | grep -c "labl" || true)
+        done
+    fi
+}
+
+if security find-certificate -c "$CERT_NAME" -a >/dev/null 2>&1; then
+    remove_duplicate_certs
     echo "Code-signing certificate \"$CERT_NAME\" already exists."
     if [ -n "$BINARY" ]; then
-        codesign -s "$CERT_NAME" -f "$BINARY"
-        echo "==> Signed: $BINARY"
+        sign_binary "$BINARY"
     fi
     exit 0
 fi
@@ -28,6 +53,9 @@ if [ -z "$KEYCHAIN_PASS" ]; then
         exit 1
     fi
 fi
+
+TMPDIR_CERT="$(mktemp -d)"
+trap 'rm -rf "$TMPDIR_CERT"' EXIT
 
 echo "==> Creating self-signed code-signing certificate..."
 
@@ -63,7 +91,7 @@ security set-key-partition-list \
 
 security add-trusted-cert -p codeSign -k "$KEYCHAIN" "$TMPDIR_CERT/cert.pem" 2>/dev/null || true
 
-if ! security find-certificate -c "$CERT_NAME" "$KEYCHAIN" >/dev/null 2>&1; then
+if ! security find-certificate -c "$CERT_NAME" -a >/dev/null 2>&1; then
     echo "ERROR: Certificate was imported but not found."
     echo "       Open Keychain Access, find \"$CERT_NAME\", and set Trust → Code Signing → Always Trust."
     exit 1
@@ -72,6 +100,5 @@ fi
 echo "==> Certificate \"$CERT_NAME\" created and ready for code signing."
 
 if [ -n "$BINARY" ]; then
-    codesign -s "$CERT_NAME" -f "$BINARY"
-    echo "==> Signed: $BINARY"
+    sign_binary "$BINARY"
 fi
