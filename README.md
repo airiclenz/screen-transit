@@ -94,7 +94,7 @@ git clone https://github.com/airiclenz/screen-transit.git
 cd screen-transit
 ./build.sh
 sudo cp .build/release/screen-transit /usr/local/bin/
-./setup-signing.sh /usr/local/bin/screen-transit
+./screen-transit-signing.sh /usr/local/bin/screen-transit
 ```
 
 Then set up the config and launchd agent yourself (see below).

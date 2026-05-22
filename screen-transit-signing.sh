@@ -49,7 +49,7 @@ if [ -z "$KEYCHAIN_PASS" ]; then
         echo
     else
         echo "ERROR: No terminal available for password prompt."
-        echo "       Run manually: setup-signing.sh"
+        echo "       Run manually: screen-transit-signing.sh"
         exit 1
     fi
 fi

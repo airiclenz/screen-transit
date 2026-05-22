@@ -36,7 +36,7 @@ sudo install -m 755 \
     "$INSTALL_DIR/$BINARY_NAME"
 
 echo "==> Setting up code signing..."
-"$SCRIPT_DIR/setup-signing.sh" "$INSTALL_DIR/$BINARY_NAME"
+"$SCRIPT_DIR/screen-transit-signing.sh" "$INSTALL_DIR/$BINARY_NAME"
 
 if [ ! -f "$CONFIG_FILE" ]; then
     echo "==> Creating default config at $CONFIG_FILE..."
