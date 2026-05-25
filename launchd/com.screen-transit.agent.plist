@@ -13,9 +13,5 @@
     <true/>
     <key>KeepAlive</key>
     <true/>
-    <key>StandardOutPath</key>
-    <string>Library/Logs/screen-transit/stdout.log</string>
-    <key>StandardErrorPath</key>
-    <string>Library/Logs/screen-transit/stderr.log</string>
 </dict>
 </plist>
