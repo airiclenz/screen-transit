@@ -27,6 +27,9 @@ echo "let appVersion = \"$VERSION\"" >> "$SCRIPT_DIR/Sources/screen-transit/Vers
 echo "==> Building $BINARY_NAME v$VERSION (release)..."
 swift build -c release --package-path "$SCRIPT_DIR"
 
+echo "==> Setting up code signing..."
+"$SCRIPT_DIR/screen-transit-signing.sh" "$SCRIPT_DIR/.build/release/$BINARY_NAME"
+
 echo "==> Stopping existing agent..."
 launchctl unload "$PLIST_DEST" 2>/dev/null || true
 
@@ -34,9 +37,6 @@ echo "==> Installing binary to $INSTALL_DIR/$BINARY_NAME..."
 sudo install -m 755 \
     "$SCRIPT_DIR/.build/release/$BINARY_NAME" \
     "$INSTALL_DIR/$BINARY_NAME"
-
-echo "==> Setting up code signing..."
-"$SCRIPT_DIR/screen-transit-signing.sh" "$INSTALL_DIR/$BINARY_NAME"
 
 if [ ! -f "$CONFIG_FILE" ]; then
     echo "==> Creating default config at $CONFIG_FILE..."
