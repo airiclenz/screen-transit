@@ -37,9 +37,16 @@ CERT_NAME="Screen Transit Local"
 if security find-certificate -c "$CERT_NAME" >/dev/null 2>&1; then
     read -p "==> Remove code-signing certificate \"$CERT_NAME\"? [y/N] " answer
     if [[ "${answer:-N}" =~ ^[Yy]$ ]]; then
-        security delete-identity -c "$CERT_NAME" 2>/dev/null || true
-        security delete-certificate -c "$CERT_NAME" 2>/dev/null || true
-        echo "    Certificate removed."
+        # Delete every matching cert by SHA-1 hash. Looping by hash avoids
+        # the ambiguity that breaks `delete-certificate -c <name>` when
+        # multiple certs share the same common name.
+        while hash=$(security find-certificate -c "$CERT_NAME" -Z 2>/dev/null \
+                | awk '/SHA-1/{print $NF; exit}'); [ -n "$hash" ]; do
+            security delete-certificate -Z "$hash" 2>/dev/null || break
+        done
+        # Catch any private keys whose identity link survived above.
+        while security delete-identity -c "$CERT_NAME" >/dev/null 2>&1; do :; done
+        echo "    Certificate(s) removed."
     else
         echo "    Certificate kept."
     fi

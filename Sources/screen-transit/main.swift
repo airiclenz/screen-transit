@@ -17,11 +17,18 @@ if arguments.contains("--help") {
           screen-transit --debug        Run as daemon with verbose logging
           screen-transit --list-displays Show detected external displays
           screen-transit --test D I     Test DDC switch: display D, input I
+          screen-transit --init         First-time setup: create default config
+                                        and sign the binary (run once after
+                                        brew install)
           screen-transit --doctor       Diagnose install conflicts
           screen-transit --version      Print version and exit
           screen-transit --help         Show this help
         """)
     exit(0)
+}
+
+if arguments.contains("--init") {
+    InitService.run()
 }
 
 if arguments.contains("--doctor") {
