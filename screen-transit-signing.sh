@@ -5,18 +5,43 @@ CERT_NAME="Screen Transit Local"
 KEYCHAIN="${HOME}/Library/Keychains/login.keychain-db"
 BINARY="${1:-}"
 
-has_valid_identity() {
-    # Note: deliberately no -v. Self-signed certs without an explicit trust
-    # setting are filtered out by -v ("Valid identities only"), but codesign
-    # accepts them fine. Skipping -v lets us avoid the trust-settings GUI
-    # popup that `security add-trusted-cert` triggers.
+# ----- helpers ------------------------------------------------------------
+
+# Count codesigning identities matching CERT_NAME.
+# Note: no -v on find-identity — self-signed certs without an explicit
+# trust setting are filtered out by -v but codesign accepts them fine.
+count_identities() {
     security find-identity -p codesigning 2>/dev/null \
-        | grep -q "\"$CERT_NAME\""
+        | grep -c "\"$CERT_NAME\"" || true
+}
+
+# SHA-1 of the first matching identity, used to disambiguate codesign when
+# duplicates exist (`codesign -s "$NAME"` fails with "ambiguous" otherwise).
+first_identity_hash() {
+    security find-identity -p codesigning 2>/dev/null \
+        | grep "\"$CERT_NAME\"" | head -1 | awk '{print $2}'
+}
+
+# Hash-based purge — `delete-certificate -c <name>` fails with "ambiguous"
+# when multiple certs share the common name, so loop by SHA-1 instead.
+purge_all_certs() {
+    while hash=$(security find-certificate -c "$CERT_NAME" -Z 2>/dev/null \
+            | awk '/SHA-1/{print $NF; exit}'); [ -n "$hash" ]; do
+        security delete-certificate -Z "$hash" 2>/dev/null || break
+    done
+    # Catch any private keys whose identity link survived the cert deletion.
+    while security delete-identity -c "$CERT_NAME" >/dev/null 2>&1; do :; done
 }
 
 sign_binary() {
     local binary="$1"
-    if codesign -s "$CERT_NAME" -f "$binary" 2>&1; then
+    local hash
+    hash=$(first_identity_hash)
+    if [ -z "$hash" ]; then
+        echo "ERROR: No codesigning identity found for $CERT_NAME"
+        exit 1
+    fi
+    if codesign -s "$hash" -f "$binary" 2>&1; then
         echo "==> Signed: $binary"
     else
         echo "ERROR: codesign failed for $binary."
@@ -24,22 +49,19 @@ sign_binary() {
     fi
 }
 
-remove_duplicate_certs() {
-    local count
-    count=$(security find-certificate -c "$CERT_NAME" -a 2>/dev/null \
-        | grep -c "labl" || true)
-    if [ "$count" -gt 1 ]; then
-        echo "==> Found $count duplicate certificates, cleaning up..."
-        while [ "$count" -gt 1 ]; do
-            security delete-certificate -c "$CERT_NAME" 2>/dev/null || break
-            count=$(security find-certificate -c "$CERT_NAME" -a 2>/dev/null \
-                | grep -c "labl" || true)
-        done
-    fi
-}
+# ----- main flow ----------------------------------------------------------
 
-if has_valid_identity; then
-    remove_duplicate_certs
+# Reset mode (ST_RESET=1) nukes existing certs so a stuck install — e.g.
+# a cert created without a partition list that triggers a runtime
+# "codesign wants to access key" popup — can recover cleanly.
+if [ "${ST_RESET:-0}" = "1" ]; then
+    echo "==> Reset requested: purging all '$CERT_NAME' certs and identities..."
+    purge_all_certs
+fi
+
+identity_count=$(count_identities)
+
+if [ "$identity_count" = "1" ]; then
     echo "Code-signing identity \"$CERT_NAME\" already present."
     if [ -n "$BINARY" ]; then
         sign_binary "$BINARY"
@@ -47,13 +69,13 @@ if has_valid_identity; then
     exit 0
 fi
 
-# No usable identity — clean up any orphan cert (cert without private key)
-# before creating a fresh one, otherwise the import will create a duplicate.
-if security find-certificate -c "$CERT_NAME" >/dev/null 2>&1; then
-    echo "==> Removing orphan certificate (no codesigning identity)..."
-    security delete-identity -c "$CERT_NAME" 2>/dev/null || true
-    security delete-certificate -c "$CERT_NAME" 2>/dev/null || true
+if [ "$identity_count" -gt 1 ]; then
+    echo "==> Found $identity_count duplicate '$CERT_NAME' identities;" \
+         "recreating cleanly..."
 fi
+
+# Either no identity, or duplicates — full purge before fresh creation.
+purge_all_certs
 
 KEYCHAIN_PASS="${ST_KEYCHAIN_PASS:-}"
 if [ -z "$KEYCHAIN_PASS" ]; then
@@ -117,7 +139,6 @@ security set-key-partition-list \
 
 if ! security find-certificate -c "$CERT_NAME" >/dev/null 2>&1; then
     echo "ERROR: Certificate was imported but not found."
-    echo "       Open Keychain Access, find \"$CERT_NAME\", and set Trust → Code Signing → Always Trust."
     exit 1
 fi
 

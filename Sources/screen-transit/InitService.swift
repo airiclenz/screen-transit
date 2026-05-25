@@ -55,15 +55,20 @@ enum InitService {
     // -------------------------------------------------------------------------
     /// Runs first-time setup: creates the default config file if missing and
     /// invokes the sibling signing script to create a self-signed cert and
-    /// sign this binary. Exits 0 on success, non-zero on failure.
+    /// sign this binary. With `--reset` also passed, purges any existing
+    /// cert(s) first — used to recover from a stale cert that triggers a
+    /// "codesign wants to access key" popup on every brew upgrade.
+    /// Exits 0 on success, non-zero on failure.
     static func run() -> Never {
-        print("screen-transit init")
+        let isReset = CommandLine.arguments.contains("--reset")
+
+        print("screen-transit init\(isReset ? " (reset)" : "")")
         print("===================")
         print("")
 
         ensureConfigExists()
         print("")
-        let signed = runSigningScript()
+        let signed = runSigningScript(reset: isReset)
 
         print("")
         if signed {
@@ -120,12 +125,15 @@ enum InitService {
 
     // -------------------------------------------------------------------------
     /// Locates the sibling signing script and runs it against this binary.
-    /// If no codesigning identity exists yet, prompts the user for their
-    /// login keychain password here (echo disabled) and forwards it to the
-    /// script via the ST_KEYCHAIN_PASS environment variable. This avoids
-    /// terminal-attribute inheritance issues with the spawned bash process.
+    /// If no codesigning identity exists yet (or `reset` is true, forcing
+    /// re-creation), prompts the user for their login keychain password
+    /// here (echo disabled) and forwards it to the script via the
+    /// ST_KEYCHAIN_PASS environment variable. This avoids terminal-
+    /// attribute inheritance issues with the spawned bash process.
+    /// `reset` is also forwarded as ST_RESET=1 so the script purges
+    /// existing certs before recreating.
     /// Returns true if the script exited 0.
-    private static func runSigningScript() -> Bool {
+    private static func runSigningScript(reset: Bool) -> Bool {
         guard let executablePath = currentExecutablePath() else {
             print("[FAIL] Could not determine running executable path.")
             return false
@@ -148,10 +156,20 @@ enum InitService {
 
         var env = ProcessInfo.processInfo.environment
 
-        if !hasValidIdentity() {
+        if reset {
+            env["ST_RESET"] = "1"
+        }
+
+        // Need the keychain password whenever we'll create a new cert —
+        // either because none exists, or because `--reset` will purge what
+        // does exist before recreating.
+        if reset || !hasValidIdentity() {
             print(
-                "==> No code-signing identity found — a new one will be "
-                    + "created."
+                reset
+                    ? "==> Reset requested — existing cert(s) will be "
+                        + "purged and a new one created."
+                    : "==> No code-signing identity found — a new one "
+                        + "will be created."
             )
             guard let password = promptPasswordSilently(
                 "    Login keychain password: "

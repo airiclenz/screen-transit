@@ -20,6 +20,10 @@ if arguments.contains("--help") {
           screen-transit --init         First-time setup: create default config
                                         and sign the binary (run once after
                                         brew install)
+          screen-transit --init --reset Like --init but purges any existing
+                                        signing cert first — use to recover
+                                        from a stale cert that triggers a
+                                        codesign popup on every brew upgrade
           screen-transit --doctor       Diagnose install conflicts
           screen-transit --version      Print version and exit
           screen-transit --help         Show this help
