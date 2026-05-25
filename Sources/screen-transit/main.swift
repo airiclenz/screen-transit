@@ -17,10 +17,15 @@ if arguments.contains("--help") {
           screen-transit --debug        Run as daemon with verbose logging
           screen-transit --list-displays Show detected external displays
           screen-transit --test D I     Test DDC switch: display D, input I
+          screen-transit --doctor       Diagnose install conflicts
           screen-transit --version      Print version and exit
           screen-transit --help         Show this help
         """)
     exit(0)
+}
+
+if arguments.contains("--doctor") {
+    DoctorService.run()
 }
 
 if arguments.contains("--debug") {
