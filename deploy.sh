@@ -13,6 +13,21 @@ CERT_NAME="Screen Transit Local"
 
 VERSION=$(cat "$SCRIPT_DIR/VERSION")
 
+# Refuse to install alongside a Homebrew install — both register LaunchAgents
+# under different labels (homebrew.mxcl.screen-transit vs. com.screen-transit.agent),
+# so launchctl runs both daemons simultaneously and they race on Bluetooth events.
+if command -v brew >/dev/null 2>&1 \
+        && brew list --formula 2>/dev/null | grep -q '^screen-transit$'; then
+    echo "ERROR: screen-transit is already installed via Homebrew."
+    echo "       Running ./deploy.sh alongside the brew install would create"
+    echo "       two competing daemons. Uninstall the brew version first:"
+    echo ""
+    echo "         brew uninstall airiclenz/tap/screen-transit"
+    echo ""
+    echo "       Then re-run ./deploy.sh."
+    exit 1
+fi
+
 if ! security find-identity -p codesigning 2>/dev/null \
         | grep -q "\"$CERT_NAME\""; then
     read -s -p "Login keychain password (for code-signing setup): " KEYCHAIN_PASS

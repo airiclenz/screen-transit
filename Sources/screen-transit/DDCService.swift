@@ -47,14 +47,18 @@ struct DDCService {
         defer { IOObjectRelease(service) }
 
         if let current = readVCP(service: service, code: 0x60) {
-            if Int(current) == inputCode {
+            // VCP 0x60 (input source) is effectively single-byte. Some monitors
+            // (e.g. Dell U3423WE) populate curHi with a duplicate of curLo, so
+            // comparing the full 16-bit value never matches. Compare low byte.
+            let currentLow = Int(current & 0xFF)
+            if currentLow == inputCode {
                 Log.info(
                     "Display \(display) already on input \(inputCode), skipping"
                 )
                 return true
             }
             Log.debug(
-                "Display \(display) currently on input \(current), switching"
+                "Display \(display) currently on input \(currentLow), switching"
             )
         } else {
             Log.debug(
@@ -188,7 +192,8 @@ struct DDCService {
         // 0x80 | 2 payload bytes
         let requestLength: UInt8 = 0x82
         let requestOpcode: UInt8 = 0x01
-        let requestChecksum: UInt8 = 0x6E ^ sourceAddress
+        // Read-request checksum excludes the source address, matching m1ddc.
+        let requestChecksum: UInt8 = 0x6E
             ^ requestLength ^ requestOpcode ^ code
 
         var request: [UInt8] = [
@@ -273,6 +278,9 @@ struct DDCService {
 
     // -------------------------------------------------------------------------
     /// Sends raw I2C data to a display via the private IOAVServiceWriteI2C API.
+    /// Repeats the write to match m1ddc's behaviour — some monitors
+    /// (e.g. Dell U3423WE) silently drop single VCP writes and only act on
+    /// repeated commands. Aborts early on hard IO failure.
     private func writeI2C(
         avService: AnyObject,
         chipAddress: UInt32,
@@ -297,9 +305,18 @@ struct DDCService {
         }
 
         let write = unsafeBitCast(symbol, to: WriteFunction.self)
-        let ioResult = write(
-            avService, chipAddress, dataAddress, data, UInt32(count)
-        )
+
+        var ioResult: IOReturn = kIOReturnSuccess
+        for _ in 0..<2 {
+            usleep(10_000)
+            ioResult = write(
+                avService, chipAddress, dataAddress, data, UInt32(count)
+            )
+            if ioResult != kIOReturnSuccess {
+                break
+            }
+        }
+
         let isSuccessful = ioResult == kIOReturnSuccess
 
         if Log.isDebugEnabled {

@@ -20,8 +20,20 @@ class BluetoothEventSource: NSObject, EventSource {
     private var connectNotification: IOBluetoothUserNotification?
 
     // =========================================================================
-    /// Retained references to per-device disconnect notification registrations.
-    private var disconnectNotifications: [String: IOBluetoothUserNotification] = [:]
+    /// Repeating timer that polls connection state of devices in
+    /// disconnectIdentifiers. Used in place of IOBluetooth's per-device
+    /// disconnect notification, which does not fire reliably for multi-host
+    /// keyboards (e.g. Logitech MX Keys S) when they switch channels.
+    private var pollTimer: Timer?
+
+    // =========================================================================
+    /// Last known isConnected() state per disconnect-watched identifier.
+    private var lastConnectedState: [String: Bool] = [:]
+
+    // =========================================================================
+    /// How often to poll connection state. 1s gives near-immediate UX response
+    /// without measurable CPU cost.
+    private let pollInterval: TimeInterval = 1.0
 
     // -------------------------------------------------------------------------
     /// Creates a source that monitors Bluetooth events for the given identifiers.
@@ -31,7 +43,9 @@ class BluetoothEventSource: NSObject, EventSource {
     }
 
     // -------------------------------------------------------------------------
-    /// Registers for global Bluetooth device connection notifications.
+    /// Registers for global Bluetooth connect notifications and starts polling
+    /// for disconnects. Polling is only enabled when at least one rule needs
+    /// disconnect tracking.
     func start() {
         connectNotification = IOBluetoothDevice.register(
             forConnectNotifications: self,
@@ -42,6 +56,10 @@ class BluetoothEventSource: NSObject, EventSource {
             Log.info("Bluetooth event source registered")
         } else {
             Log.error("Failed to register Bluetooth connect notifications")
+        }
+
+        if !disconnectIdentifiers.isEmpty {
+            startDisconnectPolling()
         }
     }
 
@@ -70,47 +88,75 @@ class BluetoothEventSource: NSObject, EventSource {
             forDevice: identifier
         )
 
+        // Keep the poll baseline in sync so a transient connect doesn't get
+        // mistakenly classified as a fresh disconnect on the next tick.
         if disconnectIdentifiers.contains(identifier) {
-            guard let notification = device.register(
-                forDisconnectNotification: self,
-                selector: #selector(deviceDidDisconnect(_:device:))
-            ) else {
-                Log.error(
-                    "Failed to register disconnect notification "
-                        + "for \(identifier)"
-                )
-                return
-            }
-            disconnectNotifications[identifier] = notification
+            lastConnectedState[identifier] = true
         }
     }
 
     // -------------------------------------------------------------------------
-    /// Handles a Bluetooth device disconnection event from IOBluetooth.
-    @objc private func deviceDidDisconnect(
-        _ notification: IOBluetoothUserNotification,
-        device: IOBluetoothDevice
-    ) {
-        guard let rawAddress = device.addressString else {
-            Log.debug("Disconnect event with nil address, skipping")
-            return
+    /// Starts the disconnect-detection polling timer and seeds the baseline
+    /// state from the current connection status of each watched device.
+    private func startDisconnectPolling() {
+        for identifier in disconnectIdentifiers {
+            lastConnectedState[identifier] = isDeviceCurrentlyConnected(identifier)
         }
 
-        let identifier = MACAddress.normalise(rawAddress)
-        let deviceName = device.name ?? "unknown"
-        Log.info("Bluetooth device disconnected: \(identifier)")
         Log.debug(
-            "Bluetooth disconnect detail: mac=\(identifier) "
-                + "name=\"\(deviceName)\""
+            "Disconnect polling started "
+                + "(\(pollInterval)s interval, "
+                + "\(disconnectIdentifiers.count) device(s))"
         )
 
-        disconnectNotifications.removeValue(forKey: identifier)
+        pollTimer = Timer.scheduledTimer(
+            withTimeInterval: pollInterval,
+            repeats: true
+        ) { [weak self] _ in
+            self?.pollDisconnects()
+        }
+    }
 
-        delegate?.eventSource(
-            self,
-            didDetect: .disconnect,
-            forDevice: identifier
-        )
+    // -------------------------------------------------------------------------
+    /// Compares current isConnected() state against the last poll for each
+    /// watched device. A true → false transition synthesises a disconnect
+    /// event for the delegate.
+    private func pollDisconnects() {
+        for identifier in disconnectIdentifiers {
+            let nowConnected = isDeviceCurrentlyConnected(identifier)
+            let wasConnected = lastConnectedState[identifier] ?? false
+
+            if wasConnected && !nowConnected {
+                Log.info("Bluetooth device disconnected: \(identifier)")
+                delegate?.eventSource(
+                    self,
+                    didDetect: .disconnect,
+                    forDevice: identifier
+                )
+            }
+
+            lastConnectedState[identifier] = nowConnected
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    /// Looks up the paired Bluetooth device with the given identifier and
+    /// returns its current connection state. Returns false if the device is
+    /// not paired or no paired devices exist.
+    private func isDeviceCurrentlyConnected(_ identifier: String) -> Bool {
+        guard let pairedDevices = IOBluetoothDevice.pairedDevices()
+                as? [IOBluetoothDevice] else {
+            return false
+        }
+
+        for device in pairedDevices {
+            guard let rawAddress = device.addressString else { continue }
+            if MACAddress.normalise(rawAddress) == identifier {
+                return device.isConnected()
+            }
+        }
+
+        return false
     }
 
 }
